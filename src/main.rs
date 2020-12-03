@@ -12,13 +12,13 @@ use winapi::ctypes::c_ulong;
 use std::mem;
 use winapi::shared::windef::HBITMAP;
 
-fn get_pixels(width: usize, height: usize) -> Vec<Vec<RGBQUAD>> {
-    vec![vec![RGBQUAD {
+fn get_pixels(width: usize, height: usize) -> Vec<RGBQUAD> {
+    vec![RGBQUAD {
         rgbBlue: u8::max_value(),
-        rgbGreen: 100,
-        rgbRed: 4,
+        rgbGreen: 0,
+        rgbRed: 0,
         rgbReserved: 0
-    }; height]; width]
+    }; height * width]
 }
 
 fn create_di_buffer(
@@ -41,9 +41,9 @@ fn create_di_buffer(
             biClrImportant: 0
         },
         bmiColors: [RGBQUAD {
-            rgbBlue: 1,
-            rgbGreen: 1,
-            rgbRed: 1,
+            rgbBlue: u8::max_value(),
+            rgbGreen: u8::max_value(),
+            rgbRed: u8::max_value(),
             rgbReserved: 0
         }]
     };
@@ -60,8 +60,12 @@ fn create_di_buffer(
 }
 
 fn render(surface: HDC) {
-    let mut pixels = get_pixels(512, 512).iter_mut().map(|mut p| p.as_mut_ptr()).collect::<Vec<_>>();
-    let bitmap = unsafe { create_di_buffer(512, 512, pixels.as_mut_ptr()) };
+    let mut pixels = get_pixels(512, 512);
+    let mut buffer = std::ptr::null_mut();
+    let bitmap = unsafe { create_di_buffer(512, 512, &mut buffer) };
+
+    let buffer_slice = unsafe { std::slice::from_raw_parts_mut(buffer, 512*512)  };
+    buffer_slice.copy_from_slice(pixels.as_slice());
 
     let src = unsafe { CreateCompatibleDC(surface) };
     let old = unsafe { SelectObject(surface, bitmap as *mut _) };
@@ -82,7 +86,7 @@ fn render(surface: HDC) {
     assert_ne!(res, 0);
 
     unsafe {
-        SelectObject(surface, old);
+        //SelectObject(surface, old);
         DeleteDC(src);
     };
 }
