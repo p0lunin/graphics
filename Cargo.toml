@@ -1,0 +1,13 @@
+[package]
+name = "some_graphics"
+version = "0.1.0"
+authors = ["p0lunin <dmytro.polunin@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+winit = "0.23.0"
+winapi = "0.3.9"
+ndarray = "0.14.0"
+
