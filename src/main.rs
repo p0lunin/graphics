@@ -12,15 +12,6 @@ use winapi::ctypes::c_ulong;
 use std::mem;
 use winapi::shared::windef::HBITMAP;
 
-fn get_pixels(width: usize, height: usize) -> Vec<RGBQUAD> {
-    vec![RGBQUAD {
-        rgbBlue: u8::max_value(),
-        rgbGreen: 0,
-        rgbRed: 0,
-        rgbReserved: 0
-    }; height * width]
-}
-
 fn create_di_buffer(
     width: i32,
     height: i32,
@@ -59,16 +50,15 @@ fn create_di_buffer(
     }
 }
 
-fn render(surface: HDC) {
-    let mut pixels = get_pixels(512, 512);
+fn render(surface: HDC, pixels: &[RGBQUAD]) {
     let mut buffer = std::ptr::null_mut();
     let bitmap = unsafe { create_di_buffer(512, 512, &mut buffer) };
 
     let buffer_slice = unsafe { std::slice::from_raw_parts_mut(buffer, 512*512)  };
-    buffer_slice.copy_from_slice(pixels.as_slice());
+    buffer_slice.copy_from_slice(pixels);
 
     let src = unsafe { CreateCompatibleDC(surface) };
-    let old = unsafe { SelectObject(surface, bitmap as *mut _) };
+    let old = unsafe { SelectObject(src, bitmap as *mut _) };
 
     unsafe { SetMapMode(src, GetMapMode(surface)); };
 
@@ -86,7 +76,7 @@ fn render(surface: HDC) {
     assert_ne!(res, 0);
 
     unsafe {
-        //SelectObject(surface, old);
+        SelectObject(src, old);
         DeleteDC(src);
     };
 }
@@ -107,6 +97,13 @@ fn main() {
     unsafe { GetObjectA(h_bitmap, std::mem::size_of::<BITMAP>() as i32, &mut header as *mut _ as _) };
     println!("width: {}, height: {}", header.bmWidth, header.bmHeight);
 
+    let pixels = vec![RGBQUAD {
+        rgbBlue: u8::max_value(),
+        rgbGreen: 0,
+        rgbRed: 0,
+        rgbReserved: 0
+    }; 512 * 512];
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(16));
 
@@ -125,7 +122,7 @@ fn main() {
             _ => ()
         };
 
-        render(surface);
+        render(surface, &pixels);
     });
     unsafe { ReleaseDC(hwnd, surface) };
 }
