@@ -10,35 +10,38 @@ use winapi::shared::windef::HBITMAP;
 pub struct WindowsGui {
     hwnd: HWND,
     w_dc: WindowDC,
+    bitmap: HBITMAP,
+    buffer: *mut RGBTRIPLE,
 }
 
 impl Gui for WindowsGui {
     fn create(window: &Window) -> Self {
         let hwnd = HWND::new(window.hwnd() as *mut _);
         let dc = hwnd.get_dc();
+        let (w, h) = window.inner_size().into();
+        let mut buffer = std::ptr::null_mut();
         Self {
             hwnd,
-            w_dc: dc
+            w_dc: dc,
+            bitmap: create_di_buffer(w, h, &mut buffer),
+            buffer
         }
     }
 
     fn draw(&mut self, width: usize, height: usize, pixels: &[Pixel]) {
-        let mut buffer = std::ptr::null_mut();
-        let bitmap = create_di_buffer(width as i32, height as i32, &mut buffer);
-
-        let buffer_slice = unsafe { std::slice::from_raw_parts_mut(buffer, 512*512)  };
+        let buffer_slice = unsafe { std::slice::from_raw_parts_mut(self.buffer, width*height)  };
         buffer_slice.copy_from_slice(unsafe { std::slice::from_raw_parts(pixels.as_ptr() as _, pixels.len()) });
 
         let src = DC::new(self.w_dc.inner);
-        let old = src.select_object(bitmap as *mut c_void);
+        let old = src.select_object(self.bitmap as *mut c_void);
         unsafe { SetMapMode(src.inner, GetMapMode(self.w_dc.inner)); };
 
         let res = unsafe { BitBlt(
             self.w_dc.inner,
             0,
             0,
-            512,
-            512,
+            width as i32,
+            height as i32,
             src.inner,
             0,
             0,
