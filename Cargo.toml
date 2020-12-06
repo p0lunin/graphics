@@ -9,5 +9,5 @@ edition = "2018"
 [dependencies]
 winit = "0.23.0"
 winapi = "0.3.9"
-ndarray = "0.14.0"
-
+na = { version = "0.23.1", package = "nalgebra"}
+assert_approx_eq = "1.1.0"

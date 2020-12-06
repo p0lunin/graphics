@@ -1,11 +1,13 @@
 mod renderer;
 mod window;
+pub mod storage;
+mod model;
 
+pub use renderer::{Camera, Renderer};
 pub use window::{Gui, get_gui};
+pub use model::{RawModel, Triangle};
 
-use std::mem::MaybeUninit;
-use std::mem;
-use ndarray::{Array3, Array2, arr2, Array1};
+use na::{Point3, Matrix4};
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -15,79 +17,40 @@ pub struct Pixel {
     pub red: u8,
 }
 
-trait Calculator {
-    fn scale(&mut self, points: &mut [f32], factor: &[f32]);
-    //fn rotate_3(&mut self, points: &mut [f32], factor: &[])
-}
-
-struct CPUCalculator;
-
-impl Calculator for CPUCalculator {
-    fn scale(&mut self, points: &mut [f32], factor: &[f32]) {
-        assert_eq!(points.len() % factor.len(), 0);
-
-        let factor_vec = factor.repeat(points.len() / factor.len() + 1);
-
-        for i in 0..points.len() {
-            points[i] *= factor_vec[i];
-        }
-    }
-/*
-    fn rotate_3(&mut self, points: &mut [f32], factor: &[_]) {
-        unimplemented!()
-    }*/
-}
-
-fn identity() -> Array2<f32> {
-    arr2(&[[1.0,0.0,0.0], [0.0,1.0,0.0], [0.0,0.0,1.0]])
-}
-
-fn add_scaling_factor(factor: &[f32], matrix: &mut Array2<f32>) {
-    assert_eq!(factor.len(), 3);
-    for i in 0..3 {
-        matrix[(i, i)] *= factor[i];
+impl Pixel {
+    pub const WHITE: Pixel = Pixel { blue: u8::max_value(), green: u8::max_value(), red: u8::max_value() };
+    pub const BLACK: Pixel = Pixel { blue: 0, green: 0, red: 0 };
+    pub fn new(blue: u8, green: u8, red: u8) -> Self {
+        Pixel { blue, green, red }
     }
 }
 
-fn add_rotating_factor(factor: &[f32], matrix: &mut Array2<f32>) {
-    assert_eq!(factor.len(), 3);
-
-    let cos_x = factor[0].cos();
-    let sin_x = factor[0].sin();
-    matrix[(1,1)] += cos_x;
-    matrix[(2,2)] += cos_x;
-    matrix[(2,1)] += sin_x;
-    matrix[(1,2)] += -sin_x;
-
-    let cos_y = factor[1].cos();
-    let sin_y = factor[1].sin();
-    matrix[(0,0)] += cos_y;
-    matrix[(3,3)] += cos_y;
-    matrix[(3,0)] += sin_y;
-    matrix[(0,3)] += -sin_y;
-
-    let cos_z = factor[2].cos();
-    let sin_z = factor[2].sin();
-    matrix[(0,0)] += cos_z;
-    matrix[(1,1)] += cos_z;
-    matrix[(0,1)] += sin_z;
-    matrix[(1,0)] += -sin_z;
-}
-
-fn calc_normal(l: &Array1<f32>, r: &Array1<f32>) -> Array1<f32> {
-    assert_eq!(l.len(), r.len());
-
-    l.iter().zip(r.iter()).map(|(l, r)|(l - r).abs()).collect()
+pub fn trilinear_interpolation(tx: f32, ty: f32, tz: f32, c0: &Point3<f32>, c1: &Point3<f32>) -> Point3<f32> {
+    let x = unsafe {
+        c0.get_unchecked(0) * (1.0 - tx) + c1.get_unchecked(0) * tx
+    };
+    let y = unsafe {
+        c0.get_unchecked(1) * (1.0 - ty) + c1.get_unchecked(1) * ty
+    };
+    let z = unsafe {
+        c0.get_unchecked(2) * (1.0 - tz) + c1.get_unchecked(2) * tz
+    };
+    Point3::new(x, y, z)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use na::{Vector3, IsometryMatrix3};
+    use assert_approx_eq::assert_approx_eq;
 
     #[test]
-    fn scale() {
-        let mut factor = identity();
-        add_scaling_factor(&[1.0, 0.0, 1.0], &mut factor);
-        assert_eq!(factor, arr2(&[[1.0,0.0,0.0], [0.0,0.0,0.0], [0.0,0.0,1.0]]));
+    fn test_trilinear_interpolation() {
+        let point1 = Point3::<f32>::new(0.0, 0.0, 0.0);
+        let point2 = Point3::<f32>::new(2.0, 2.0, 0.0);
+        let res = trilinear_interpolation(0.3, 0.5, 0.0, &point1, &point2);
+        assert_approx_eq!(res[0], 0.6, 1e-5);
+        assert_approx_eq!(res[1], 1.0, 1e-5);
+        assert_approx_eq!(res[2], 0.0, 1e-5);
     }
 }
